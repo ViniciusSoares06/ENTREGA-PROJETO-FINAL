@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+</head>
+<style>
+    body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .chat {
+        width: 80vw;
+        height: 70vh;
+        background-color: rgba(128, 128, 128, 0.2);
+        border-radius: 15px 15px 0 0;
+        border: 2px solid black;
+        overflow-y: auto;
+    }
+
+    .chat span{
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #enviar {
+        position: absolute;
+        display: flex;
+        top: 86vh;
+        width: 80vw;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    #formNome {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    input {
+        padding-left: 30px;
+        border: 2px solid black;
+    }
+
+    #nome {
+        width: 60vw;
+        margin: 20px;
+        height: 40px;
+        border-radius: 15px;
+        border: 2px solid black;
+    }
+
+    #enviar input {
+        width: 90%;
+        height: 40px;
+        border-radius: 0 0 0 15px;
+    }
+
+    button {
+        width: 10%;
+        height: 45px;
+        border-radius: 15px;
+        border: none;
+        border: 2px solid black;
+        background-color: brown;
+        color: white;
+    }
+    
+    #enviar button {
+        width: 10%;
+        height: 45px;
+        border-radius: 0 0 15px 0;
+        border: none;
+        border: 2px solid black;
+        background-color: brown;
+        color: white;
+    }
+
+    input:disabled {
+        background-color: rgba(128, 128, 128, 0.4);
+    }
+</style>
+<body> 
+    <form id="formNome">
+        <input id="nome" type="text" name="nome" placeholder="Digite seu nome:" onload="focus()">
+        <button type="button" onclick="entrarNoChat()">Entrar</button>
+    </form>
+    <form id="formChat">
+        <div class="chat" id="chat">
+            <div id="enviar">
+                <input type="text" name="mensagem" placeholder="Digite sua mensagem..." disabled>
+                <button type="submit" id="botaoMensagem" disabled>Enviar</button>
+            </div>  
+        </div>
+    </form>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+    <script>
+        const socket = io("http://10.0.0.120:5000");
+
+        window.onload = function() {
+            document.getElementById("nome").focus();
+
+            socket.on('connect', () => {
+                socket.send('Novo usuário conectado!');
+            });
+
+            document.querySelectorAll("form").forEach(form => {
+                form.addEventListener("submit", function(evento) {
+                    evento.preventDefault();
+                });
+            });
+
+            document.getElementById("formChat").addEventListener("submit", function(evento) {
+                const campoMensagem = evento.target.querySelector("input[name='mensagem']");
+                const mensagem = campoMensagem.value.trim();
+
+                if (mensagem === "") {
+                    return;
+                }
+
+                if (mensagem === "/sair") {
+                    socket.emit('enviarMensagem', { 
+                        nome: localStorage.getItem("nome"),
+                        mensagem: "/sair"
+                    });
+                    localStorage.removeItem("nome");
+                    socket.disconnect();
+                    alert("Você saiu do Chat!")
+                    location.reload()
+                    return;
+                }
+
+                socket.emit('enviarMensagem', { 
+                    nome: localStorage.getItem("nome"),
+                    mensagem: mensagem 
+                });
+                campoMensagem.value = "";
+                campoMensagem.focus();
+            });
+
+            socket.on("receberMensagem", (msg) => {
+                adicionarMensagemNoChat(msg);
+            });
+
+            socket.on("historicoMensagens", (msgs) => {
+                msgs.forEach((msg) => adicionarMensagemNoChat(msg));
+            });
+
+            socket.on("usuarioSaiu", (data) => {
+                alert(`${data.nome} saiu do chat.`);
+                location.reload();
+            });
+        };
+
+        document.getElementById("nome").addEventListener("keydown", function(evento) {
+            if (evento.key === "Enter") {
+                entrarNoChat();
+            }
+        });
+
+        function entrarNoChat() {
+            const campoNome = document.getElementById("nome");
+            const campoMensagem = document.querySelector("input[name='mensagem']");
+            const botaoMensagem = document.getElementById("botaoMensagem");
+
+            if (campoNome.value.trim() === "") {
+                alert("O nome não pode ser vazio!");
+                return;
+            }
+
+            localStorage.setItem("nome", campoNome.value);
+
+            socket.emit('enviarNome', { nome: campoNome.value });
+
+            socket.emit('enviarMensagem', { 
+                nome: "Chat", 
+                mensagem: `${campoNome.value} entrou no chat!`
+            });
+
+            campoNome.disabled = true;
+            campoMensagem.disabled = false;
+            botaoMensagem.disabled = false;
+            campoMensagem.focus();
+        }
+
+        function adicionarMensagemNoChat(msg) {
+            const chat = document.getElementById('chat');
+            const span = document.createElement("span");
+            span.innerHTML = `<strong>${msg.nome}</strong> - ${msg.mensagem}<br><br>`;
+            chat.appendChild(span);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+    </script>
+    
+</body>
+</html>
